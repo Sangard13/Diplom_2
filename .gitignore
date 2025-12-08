@@ -7,4 +7,5 @@ venv/
 allure-results/
 allure-report/
 *.log
-.idea
+
+".idea/" 
