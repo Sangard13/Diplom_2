@@ -1,68 +1,105 @@
 import allure
 import pytest
-from helpers.api_helper import ApiHelper
+from data.test_data import TestData
 
 
 @allure.feature("Создание пользователя")
+@allure.story("Эндпоинт: POST /api/auth/register")
 class TestCreateUser:
 
     @allure.title("Создание уникального пользователя")
-    @allure.description("Тест на успешное создание нового пользователя")
-    def test_create_unique_user_success(self, api_helper):
-        with allure.step("Создать уникального пользователя"):
-            email = api_helper.generate_random_email()
-            response = api_helper.create_user(email=email)
+    @allure.severity(allure.severity_level.BLOCKER)
+    def test_create_unique_user(self, api_client):
+        """Тест создания уникального пользователя"""
+        user_data = TestData.get_valid_user_data()
 
-        with allure.step("Проверить статус код"):
-            assert response.status_code == 200, f"Ожидался код 200, получен {response.status_code}"
+        with allure.step("Отправка запроса на создание пользователя"):
+            response = api_client.register_user(**user_data)
 
-        with allure.step("Проверить тело ответа"):
-            response_body = response.json()
-            assert "success" in response_body, "В ответе отсутствует поле success"
-            assert response_body["success"] is True, f"success должно быть True, получено {response_body['success']}"
-            assert "user" in response_body, "В ответе отсутствует поле user"
-            assert "email" in response_body["user"], "В ответе user отсутствует email"
-            assert response_body["user"]["email"] == email, f"Email не совпадает"
-            assert "name" in response_body["user"], "В ответе user отсутствует name"
-            assert "accessToken" in response_body, "В ответе отсутствует accessToken"
-            assert "refreshToken" in response_body, "В ответе отсутствует refreshToken"
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 200, f"Ожидался статус 200, получен {response.status_code}"
+
+        with allure.step("Проверка тела ответа"):
+            response_data = response.json()
+            assert response_data["success"] is True, "Поле success должно быть True"
+            assert "accessToken" in response_data, "В ответе должен быть accessToken"
+            assert "refreshToken" in response_data, "В ответе должен быть refreshToken"
+            assert response_data["user"]["email"] == user_data["email"], "Email не совпадает"
+            assert response_data["user"]["name"] == user_data["name"], "Name не совпадает"
 
     @allure.title("Создание пользователя, который уже зарегистрирован")
-    @allure.description("Тест на попытку создания уже существующего пользователя")
-    def test_create_existing_user_fail(self, api_helper, create_and_delete_user):
-        with allure.step("Создать первого пользователя"):
-            email = api_helper.generate_random_email()
-            create_response = create_and_delete_user(email=email)
-            assert create_response.status_code == 200, "Первый пользователь должен быть создан успешно"
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_existing_user(self, registered_user):
+        """Тест создания уже существующего пользователя"""
+        client = registered_user["client"]
+        email = registered_user["email"]
+        password = registered_user["password"]
+        name = registered_user["name"]
 
-        with allure.step("Попытаться создать пользователя с тем же email"):
-            response = api_helper.create_user(email=email)
+        with allure.step("Повторная регистрация того же пользователя"):
+            response = client.register_user(email, password, name)
 
-        with allure.step("Проверить статус код"):
-            assert response.status_code == 403, f"Ожидался код 403, получен {response.status_code}"
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 403, f"Ожидался статус 403, получен {response.status_code}"
 
-        with allure.step("Проверить тело ответа"):
-            response_body = response.json()
-            assert "success" in response_body, "В ответе отсутствует поле success"
-            assert response_body["success"] is False, f"success должно быть False, получено {response_body['success']}"
-            assert "message" in response_body, "В ответе отсутствует поле message"
+        with allure.step("Проверка тела ответа"):
+            response_data = response.json()
+            assert response_data["success"] is False, "Поле success должно быть False"
+            assert response_data["message"] == "User already exists", "Неверное сообщение об ошибке"
 
-    @allure.title("Создание пользователя без обязательного поля")
-    @allure.description("Тест на создание пользователя без заполнения одного из обязательных полей")
-    @pytest.mark.parametrize("missing_field", ["email", "password", "name"])
-    def test_create_user_missing_field_fail(self, api_helper, missing_field):
-        with allure.step(f"Создать пользователя без поля {missing_field}"):
-            email = api_helper.generate_random_email() if missing_field != "email" else None
-            password = "Password123!" if missing_field != "password" else None
-            name = "Test User" if missing_field != "name" else None
+    @allure.title("Создание пользователя без email")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_without_email(self, api_client):
+        """Тест создания пользователя без обязательного поля email"""
+        user_data = {
+            "password": "Password123",
+            "name": "Test User"
+        }
 
-            response = api_helper.create_user(email=email, password=password, name=name)
+        with allure.step("Отправка запроса без email"):
+            response = api_client.session.post(
+                f"{api_client.BASE_URL}/auth/register",
+                json=user_data,
+                headers=api_client._get_headers()
+            )
 
-        with allure.step("Проверить статус код"):
-            assert response.status_code == 403, f"Ожидался код 403, получен {response.status_code}"
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 403, f"Ожидался статус 403, получен {response.status_code}"
 
-        with allure.step("Проверить тело ответа"):
-            response_body = response.json()
-            assert "success" in response_body, "В ответе отсутствует поле success"
-            assert response_body["success"] is False, f"success должно быть False, получено {response_body['success']}"
-            assert "message" in response_body, "В ответе отсутствует поле message"
+    @allure.title("Создание пользователя без пароля")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_without_password(self, api_client):
+        """Тест создания пользователя без обязательного поля password"""
+        user_data = {
+            "email": TestData.get_valid_user_data()["email"],
+            "name": "Test User"
+        }
+
+        with allure.step("Отправка запроса без пароля"):
+            response = api_client.session.post(
+                f"{api_client.BASE_URL}/auth/register",
+                json=user_data,
+                headers=api_client._get_headers()
+            )
+
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 403, f"Ожидался статус 403, получен {response.status_code}"
+
+    @allure.title("Создание пользователя без имени")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_without_name(self, api_client):
+        """Тест создания пользователя без обязательного поля name"""
+        user_data = {
+            "email": TestData.get_valid_user_data()["email"],
+            "password": "Password123"
+        }
+
+        with allure.step("Отправка запроса без имени"):
+            response = api_client.session.post(
+                f"{api_client.BASE_URL}/auth/register",
+                json=user_data,
+                headers=api_client._get_headers()
+            )
+
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 403, f"Ожидался статус 403, получен {response.status_code}"

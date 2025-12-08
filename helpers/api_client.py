@@ -1,64 +1,94 @@
 import requests
-import random
-import string
-from config import Config
+from typing import Dict, List
 
 
-class ApiHelper:
+class StellarBurgersAPI:
+    BASE_URL = "https://stellarburgers.education-services.ru/api"
 
-    @staticmethod
-    def generate_random_email():
-        """Генерация случайного email"""
-        random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
-        return f"{Config.TEST_EMAIL_PREFIX}{random_string}@test.com"
+    def __init__(self):
+        self.session = requests.Session()
+        self.token = None
 
-    @staticmethod
-    def create_user(email=None, password=None, name=None):
-        """Создание пользователя"""
-        if email is None:
-            email = ApiHelper.generate_random_email()
-        if password is None:
-            password = Config.TEST_PASSWORD
-        if name is None:
-            name = Config.TEST_NAME
+    def set_token(self, token: str):
+        """Установка токена авторизации"""
+        self.token = token
 
+    def _get_headers(self, auth: bool = False) -> Dict:
+        """Получение заголовков для запроса"""
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        if auth and self.token:
+            # В документации указано, что токен передается без префикса Bearer
+            headers['Authorization'] = self.token
+        return headers
+
+    def register_user(self, email: str, password: str, name: str) -> requests.Response:
+        """Регистрация пользователя"""
+        url = f"{self.BASE_URL}/auth/register"
         payload = {
             "email": email,
             "password": password,
             "name": name
         }
+        response = self.session.post(url, json=payload, headers=self._get_headers())
 
-        response = requests.post(Config.CREATE_USER_URL, json=payload)
+        # Сохраняем токен, если регистрация успешна
+        if response.status_code == 200:
+            data = response.json()
+            if 'accessToken' in data:
+                self.token = data['accessToken']
+
         return response
 
-    @staticmethod
-    def login_user(email, password):
+    def login_user(self, email: str, password: str) -> requests.Response:
         """Авторизация пользователя"""
+        url = f"{self.BASE_URL}/auth/login"
         payload = {
             "email": email,
             "password": password
         }
+        response = self.session.post(url, json=payload, headers=self._get_headers())
 
-        response = requests.post(Config.LOGIN_URL, json=payload)
+        # Сохраняем токен, если авторизация успешна
+        if response.status_code == 200:
+            data = response.json()
+            if 'accessToken' in data:
+                self.token = data['accessToken']
+
         return response
 
-    @staticmethod
-    def delete_user(access_token):
-        """Удаление пользователя (для очистки)"""
-        headers = {"Authorization": access_token}
-        response = requests.delete(Config.CREATE_USER_URL, headers=headers)
+    def delete_user(self) -> requests.Response:
+        """Удаление пользователя (требуется авторизация)"""
+        if not self.token:
+            raise ValueError("Требуется авторизация для удаления пользователя")
+
+        url = f"{self.BASE_URL}/auth/user"
+        response = self.session.delete(url, headers=self._get_headers(auth=True))
         return response
 
-    @staticmethod
-    def create_order(ingredients=None, access_token=None):
+    def create_order(self, ingredients: List[str], auth: bool = True) -> requests.Response:
         """Создание заказа"""
-        headers = {}
-        if access_token:
-            headers["Authorization"] = access_token
+        url = f"{self.BASE_URL}/orders"
+        payload = {
+            "ingredients": ingredients
+        }
 
-        payload = {}
-        if ingredients is not None:
-            payload["ingredients"] = ingredients
+        if auth:
+            response = self.session.post(url, json=payload, headers=self._get_headers(auth=True))
+        else:
+            response = self.session.post(url, json=payload, headers=self._get_headers())
 
-        response = requests.post(Config.CREATE_ORDER_URL, headers=headers, json=payload)
+        return response
+
+    def get_ingredients(self) -> requests.Response:
+        """Получение списка ингредиентов"""
+        url = f"{self.BASE_URL}/ingredients"
+        response = self.session.get(url, headers=self._get_headers())
+        return response
+
+    def get_user_info(self) -> requests.Response:
+        """Получение информации о пользователе"""
+        url = f"{self.BASE_URL}/auth/user"
+        response = self.session.get(url, headers=self._get_headers(auth=True))
         return response

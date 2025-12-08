@@ -1,65 +1,80 @@
+import allure
 import pytest
-from helpers.api_helper import ApiHelper
-from config import Config
+from helpers.api_client import StellarBurgersAPI
+from data.test_data import TestData
 
 
+@allure.feature("Логин пользователя")
+@allure.story("Эндпоинт: POST /api/auth/login")
 class TestLoginUser:
 
-    def test_login_existing_user_success(self, api_helper, existing_user_data):
-        """Вход под существующим пользователем"""
-        # Выполнить вход с правильными учетными данными
-        response = api_helper.login_user(
-            email=existing_user_data['email'],
-            password=existing_user_data['password']
-        )
+    @allure.title("Вход под существующим пользователем")
+    @allure.severity(allure.severity_level.BLOCKER)
+    def test_login_existing_user(self, registered_user):
+        """Тест входа под существующим пользователем"""
+        email = registered_user["email"]
+        password = registered_user["password"]
 
-        print(f"\nТест: Вход существующего пользователя")
-        print(f"Email: {existing_user_data['email']}")
-        print(f"Статус код: {response.status_code}")
-        print(f"Ответ: {response.text[:200]}...")
+        # Создаем нового клиента для теста входа
+        new_client = StellarBurgersAPI()
 
-        # Проверить статус код
-        assert response.status_code == 200, f"Ожидался код 200, получен {response.status_code}. Ответ: {response.text}"
+        with allure.step("Отправка запроса на вход"):
+            response = new_client.login_user(email, password)
 
-        # Проверить тело ответа
-        response_body = response.json()
-        assert "success" in response_body, f"В ответе отсутствует поле success. Ответ: {response_body}"
-        assert response_body["success"] is True, f"success должно быть True, получено {response_body['success']}"
-        assert "user" in response_body, "В ответе отсутствует поле user"
-        assert "email" in response_body["user"], "В ответе user отсутствует email"
-        assert response_body["user"]["email"] == existing_user_data['email'], f"Email не совпадает"
-        assert "name" in response_body["user"], "В ответе user отсутствует name"
-        assert response_body["user"]["name"] == existing_user_data['name'], f"Name не совпадает"
-        assert "accessToken" in response_body, "В ответе отсутствует accessToken"
-        assert "refreshToken" in response_body, "В ответе отсутствует refreshToken"
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 200, f"Ожидался статус 200, получен {response.status_code}"
 
-        print(f"✅ Успешный вход пользователя {response_body['user']['name']}")
+        with allure.step("Проверка тела ответа"):
+            response_data = response.json()
+            assert response_data["success"] is True, "Поле success должно быть True"
+            assert "accessToken" in response_data, "В ответе должен быть accessToken"
+            assert "refreshToken" in response_data, "В ответе должен быть refreshToken"
+            assert response_data["user"]["email"] == email, "Email не совпадает"
 
-    @pytest.mark.parametrize("test_case", [
-        ("wrong@email.com", "123456789", "неверным email"),
-        ("qaerfsf13@hmaul.com", "WrongPassword!", "неверным паролем"),
-        ("wrong@email.com", "WrongPassword!", "неверным email и паролем")
-    ])
-    def test_login_with_wrong_credentials_fail(self, api_helper, test_case):
-        """Вход с неверным логином и паролем"""
-        email, password, description = test_case
+    @allure.title("Вход с неверным email")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_login_with_wrong_email(self, api_client):
+        """Тест входа с неверным email"""
+        with allure.step("Отправка запроса с неверным email"):
+            response = api_client.login_user(
+                TestData.WRONG_EMAIL,
+                TestData.BASE_PASSWORD
+            )
 
-        print(f"\nТест: Вход с {description}")
-        print(f"Email: {email}")
-        print(f"Пароль: {password}")
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 401, f"Ожидался статус 401, получен {response.status_code}"
 
-        response = api_helper.login_user(email=email, password=password)
+        with allure.step("Проверка тела ответа"):
+            response_data = response.json()
+            assert response_data["success"] is False, "Поле success должно быть False"
+            assert response_data["message"] == "email or password are incorrect", "Неверное сообщение об ошибке"
 
-        print(f"Статус код: {response.status_code}")
-        print(f"Ответ: {response.text}")
+    @allure.title("Вход с неверным паролем")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_login_with_wrong_password(self, registered_user):
+        """Тест входа с неверным паролем"""
+        email = registered_user["email"]
 
-        # Проверить статус код
-        assert response.status_code == 401, f"Ожидался код 401, получен {response.status_code}"
+        # Создаем нового клиента
+        client = StellarBurgersAPI()
 
-        # Проверить тело ответа
-        response_body = response.json()
-        assert "success" in response_body, "В ответе отсутствует поле success"
-        assert response_body["success"] is False, f"success должно быть False, получено {response_body['success']}"
-        assert "message" in response_body, "В ответе отсутствует поле message"
+        with allure.step("Отправка запроса с неверным паролем"):
+            response = client.login_user(email, TestData.WRONG_PASSWORD)
 
-        print(f"✅ Корректная обработка неверных данных: {response_body['message']}")
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 401, f"Ожидался статус 401, получен {response.status_code}"
+
+        with allure.step("Проверка тела ответа"):
+            response_data = response.json()
+            assert response_data["success"] is False, "Поле success должно быть False"
+            assert response_data["message"] == "email or password are incorrect", "Неверное сообщение об ошибке"
+
+    @allure.title("Вход с пустыми данными")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_login_with_empty_data(self, api_client):
+        """Тест входа с пустыми данными"""
+        with allure.step("Отправка запроса с пустыми данными"):
+            response = api_client.login_user("", "")
+
+        with allure.step("Проверка статус-кода ответа"):
+            assert response.status_code == 401, f"Ожидался статус 401, получен {response.status_code}"
