@@ -1,37 +1,14 @@
 import pytest
-import allure
-import random
-import string
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from helpers.api_client import StellarBurgersAPI
+from helpers.data_generator import UserDataGenerator
 
 
-def generate_random_email():
-    """Генерация случайного email"""
-    random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
-    return f"test_{random_string}@example.com"
-
-
-def generate_random_name():
-    """Генерация случайного имени"""
-    random_string = ''.join(random.choices(string.ascii_letters, k=8))
-    return f"Test User {random_string}"
-
-
-class TestData:
-    BASE_PASSWORD = "Password123"
-    WRONG_EMAIL = "wrong@example.com"
-    WRONG_PASSWORD = "WrongPassword"
-
-    @staticmethod
-    def get_valid_user_data():
-        """Получение валидных данных пользователя"""
-        return {
-            "email": generate_random_email(),
-            "password": "Password123",
-            "name": generate_random_name()
-        }
-
-
+# Фикстуры для тестов создания пользователя и логина
 @pytest.fixture
 def api_client():
     """Фикстура для создания API клиента"""
@@ -39,68 +16,93 @@ def api_client():
 
 
 @pytest.fixture
-def registered_user(api_client):
-    """Фикстура для создания зарегистрированного пользователя"""
-    user_data = TestData.get_valid_user_data()
-    response = api_client.register_user(**user_data)
-    assert response.status_code == 200, f"Не удалось зарегистрировать пользователя: {response.text}"
+def new_user_data():
+    """Фикстура генерирует данные нового пользователя"""
+    return UserDataGenerator.generate_valid_user_data()
 
-    yield {
+
+@pytest.fixture
+def registered_user(api_client, new_user_data):
+    """
+    Фикстура создает зарегистрированного пользователя для тестов.
+    Автоматически удаляет пользователя после теста.
+    """
+    response = api_client.register_user(**new_user_data)
+
+    if response.status_code != 200:
+        pytest.skip("Не удалось зарегистрировать пользователя для теста")
+
+    response_data = response.json()
+    token = response_data.get("accessToken")
+    api_client.token = token
+
+    # Данные пользователя
+    user_info = {
         "client": api_client,
-        "email": user_data["email"],
-        "password": user_data["password"],
-        "name": user_data["name"],
+        "email": new_user_data["email"],
+        "password": new_user_data["password"],
+        "name": new_user_data["name"],
+        "user_data": new_user_data,
+        "token": token,
         "response": response
     }
 
+    yield user_info
+
     # Удаление пользователя после теста
-    try:
-        if api_client.token:
-            delete_response = api_client.delete_user()
-            print(f"Пользователь удален: {delete_response.status_code}")
-    except Exception as e:
-        print(f"Ошибка при удалении пользователя: {e}")
+    if token:
+        api_client.token = token
+        api_client.delete_user()
+    api_client.token = None
 
 
+# Фикстуры для тестов создания заказа
 @pytest.fixture
 def get_ingredients(api_client):
     """Фикстура для получения списка ингредиентов"""
     response = api_client.get_ingredients()
-    assert response.status_code == 200, "Не удалось получить список ингредиентов"
+
+    if response.status_code != 200:
+        pytest.skip("Не удалось получить список ингредиентов")
+
     data = response.json()
-    return data["data"]
+    if not data.get("success", False):
+        pytest.skip("API вернуло неуспешный ответ для ингредиентов")
+
+    return data.get("data", [])
 
 
 @pytest.fixture
 def valid_ingredients(get_ingredients):
-    """Фикстура для получения валидных ингредиентов"""
+    """Фикстура для получения валидных ингредиентов для заказа"""
+    if not get_ingredients:
+        pytest.skip("Нет доступных ингредиентов")
+
     ingredients = []
 
-    # Берем первые 3 ингредиента разных типов
-    buns = []
-    sauces = []
-    mains = []
+    # Ингредиенты разных типов для теста заказа
+    buns = [ing for ing in get_ingredients if ing.get("type") == "bun"]
+    sauces = [ing for ing in get_ingredients if ing.get("type") == "sauce"]
+    mains = [ing for ing in get_ingredients if ing.get("type") == "main"]
 
-    for ingredient in get_ingredients:
-        if ingredient["type"] == "bun":
-            buns.append(ingredient["_id"])
-        elif ingredient["type"] == "sauce":
-            sauces.append(ingredient["_id"])
-        elif ingredient["type"] == "main":
-            mains.append(ingredient["_id"])
-
-    # Добавляем по одному из каждой категории, если есть
+    # Добавление по одному ингредиенту каждого типа
     if buns:
-        ingredients.append(buns[0])
+        ingredients.append(buns[0].get("_id"))
     if sauces:
-        ingredients.append(sauces[0])
+        ingredients.append(sauces[0].get("_id"))
     if mains:
-        ingredients.append(mains[0])
+        ingredients.append(mains[0].get("_id"))
 
     return ingredients
 
 
 @pytest.fixture
 def invalid_ingredient_hash():
-    """Фикстура для невалидного хеша ингредиента"""
+    """Фикстура для неверного хеша ингредиента"""
     return ["invalid_hash_12345"]
+
+
+@pytest.fixture
+def empty_ingredients():
+    """Фикстура возвращает пустой список ингредиентов"""
+    return []

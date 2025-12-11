@@ -1,94 +1,88 @@
 import requests
-from typing import Dict, List
 
 
 class StellarBurgersAPI:
-    BASE_URL = "https://stellarburgers.education-services.ru/api"
-
-    def __init__(self):
-        self.session = requests.Session()
+    def __init__(self, base_url="https://stellarburgers.education-services.ru"):
+        self.base_url = base_url
         self.token = None
 
-    def set_token(self, token: str):
-        """Установка токена авторизации"""
-        self.token = token
-
-    def _get_headers(self, auth: bool = False) -> Dict:
-        """Получение заголовков для запроса"""
+    def _get_headers(self):
+        """Получение заголовков для запросов"""
         headers = {
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json"
         }
-        if auth and self.token:
-            # В документации указано, что токен передается без префикса Bearer
-            headers['Authorization'] = self.token
+        if self.token:
+            headers["Authorization"] = self.token
         return headers
 
-    def register_user(self, email: str, password: str, name: str) -> requests.Response:
-        """Регистрация пользователя"""
-        url = f"{self.BASE_URL}/auth/register"
-        payload = {
-            "email": email,
-            "password": password,
-            "name": name
-        }
-        response = self.session.post(url, json=payload, headers=self._get_headers())
+    def register_user(self, email=None, password=None, name=None):
+        """Регистрация пользователя - принимает optional параметры"""
+        url = f"{self.base_url}/api/auth/register"
 
-        # Сохраняем токен, если регистрация успешна
-        if response.status_code == 200:
-            data = response.json()
-            if 'accessToken' in data:
-                self.token = data['accessToken']
+        payload = {}
+        if email is not None:
+            payload["email"] = email
+        if password is not None:
+            payload["password"] = password
+        if name is not None:
+            payload["name"] = name
 
-        return response
+        return requests.post(url, json=payload)
 
-    def login_user(self, email: str, password: str) -> requests.Response:
+    def login_user(self, email, password):
         """Авторизация пользователя"""
-        url = f"{self.BASE_URL}/auth/login"
+        url = f"{self.base_url}/api/auth/login"
         payload = {
             "email": email,
             "password": password
         }
-        response = self.session.post(url, json=payload, headers=self._get_headers())
+        return requests.post(url, json=payload)
 
-        # Сохраняем токен, если авторизация успешна
-        if response.status_code == 200:
-            data = response.json()
-            if 'accessToken' in data:
-                self.token = data['accessToken']
+    def get_user_info(self):
+        """Получение информации о пользователе"""
+        url = f"{self.base_url}/api/auth/user"
+        return requests.get(url, headers=self._get_headers())
 
-        return response
+    def update_user_info(self, email=None, password=None, name=None):
+        """Обновление информации о пользователе"""
+        url = f"{self.base_url}/api/auth/user"
+        payload = {}
+        if email:
+            payload["email"] = email
+        if password:
+            payload["password"] = password
+        if name:
+            payload["name"] = name
 
-    def delete_user(self) -> requests.Response:
-        """Удаление пользователя (требуется авторизация)"""
-        if not self.token:
-            raise ValueError("Требуется авторизация для удаления пользователя")
+        return requests.patch(url, json=payload, headers=self._get_headers())
 
-        url = f"{self.BASE_URL}/auth/user"
-        response = self.session.delete(url, headers=self._get_headers(auth=True))
-        return response
+    def delete_user(self):
+        """Удаление пользователя"""
+        url = f"{self.base_url}/api/auth/user"
+        return requests.delete(url, headers=self._get_headers())
 
-    def create_order(self, ingredients: List[str], auth: bool = True) -> requests.Response:
+    def get_ingredients(self):
+        """Получение списка ингредиентов"""
+        url = f"{self.base_url}/api/ingredients"
+        return requests.get(url)
+
+    def create_order(self, ingredients):
         """Создание заказа"""
-        url = f"{self.BASE_URL}/orders"
+        url = f"{self.base_url}/api/orders"
         payload = {
             "ingredients": ingredients
         }
+        return requests.post(url, json=payload, headers=self._get_headers())
 
-        if auth:
-            response = self.session.post(url, json=payload, headers=self._get_headers(auth=True))
-        else:
-            response = self.session.post(url, json=payload, headers=self._get_headers())
+    def get_user_orders(self):
+        """Получение заказов пользователя"""
+        url = f"{self.base_url}/api/orders"
+        return requests.get(url, headers=self._get_headers())
 
-        return response
-
-    def get_ingredients(self) -> requests.Response:
-        """Получение списка ингредиентов"""
-        url = f"{self.BASE_URL}/ingredients"
-        response = self.session.get(url, headers=self._get_headers())
-        return response
-
-    def get_user_info(self) -> requests.Response:
-        """Получение информации о пользователе"""
-        url = f"{self.BASE_URL}/auth/user"
-        response = self.session.get(url, headers=self._get_headers(auth=True))
-        return response
+    def logout_user(self):
+        """Выход из системы"""
+        url = f"{self.base_url}/api/auth/logout"
+        payload = {
+            "token": self.token.replace("Bearer ", "") if self.token and "Bearer " in self.token else self.token
+        }
+        return requests.post(url, json=payload)
