@@ -23,9 +23,6 @@ class TestCreateOrder:
         api_client.token = None
         response = api_client.create_order(valid_ingredients)
 
-        # В документации говорится, что должен быть 401 Unauthorized,
-        # но фактическое поведение API - 200 (успех)
-        # Возможно ошибка в документации
 
         assert response.status_code == 200, \
             f"Фактическое поведение API: ожидался 200, получен {response.status_code}. " \

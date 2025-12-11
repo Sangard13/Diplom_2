@@ -16,7 +16,7 @@ class TestCreateUser:
         response_data = response.json()
         assert response_data["success"] is True
 
-        # Очистка - удаляем созданного пользователя
+        # Очистка - удаление созданного пользователя
         api_client.token = response_data["accessToken"]
         api_client.delete_user()
         api_client.token = None

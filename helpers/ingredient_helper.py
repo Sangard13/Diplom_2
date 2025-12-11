@@ -20,7 +20,6 @@ class IngredientHelper:
 
         selected = []
 
-        # Добавляем булку, если есть
         if categorized["bun"]:
             selected.append(categorized["bun"][0])
         if categorized["sauce"]:

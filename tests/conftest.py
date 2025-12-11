@@ -85,7 +85,7 @@ def valid_ingredients(get_ingredients):
     sauces = [ing for ing in get_ingredients if ing.get("type") == "sauce"]
     mains = [ing for ing in get_ingredients if ing.get("type") == "main"]
 
-    # Добавление по одному ингредиенту каждого типа
+    # Добавляем по одному ингредиенту каждого типа
     if buns:
         ingredients.append(buns[0].get("_id"))
     if sauces:
