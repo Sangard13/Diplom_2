@@ -15,7 +15,6 @@ def generate_random_name() -> str:
 
 
 class TestData:
-    # Тестовые пользователи
     BASE_PASSWORD = "Password123"
     BASE_NAME = "Test User"
 

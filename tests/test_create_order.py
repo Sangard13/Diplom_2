@@ -23,10 +23,7 @@ class TestCreateOrder:
         api_client.token = None
         response = api_client.create_order(valid_ingredients)
 
-
-        assert response.status_code == 200, \
-            f"Фактическое поведение API: ожидался 200, получен {response.status_code}. " \
-            f"Документация говорит о 401, но API позволяет создавать заказы без авторизации"
+        assert response.status_code == 200
 
         response_data = response.json()
         assert response_data["success"] is True
@@ -58,3 +55,4 @@ class TestCreateOrder:
         response = registered_user["client"].create_order(invalid_ingredient_hash)
 
         assert response.status_code == 500
+
